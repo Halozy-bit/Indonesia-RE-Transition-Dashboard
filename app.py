@@ -5,17 +5,16 @@ import plotly.graph_objects as go
 import dash
 from dash import dcc, html, Input, Output
 import dash_bootstrap_components as dbc
-import joblib
 import numpy as np
+import os
 
 # --- 1. Muat Data dan Model ---
-# Muat dataset yang telah disiapkan dan dibersihkan
-try:
-    df = pd.read_csv('../data/indo_energy_filled.csv')
-except FileNotFoundError:
-    print("Pastikan file 'indo_energy_filled.csv' ada di folder '../data/'")
-    # Fallback: buat data dummy untuk testing
-    df = pd.DataFrame({
+# Untuk production, kita akan menggunakan data dummy yang sudah didefinisikan
+# karena file CSV dan model mungkin tidak tersedia di deployment
+def create_dummy_data():
+    """Membuat data dummy untuk testing dan production"""
+    np.random.seed(42)  # Untuk konsistensi data
+    return pd.DataFrame({
         'year': range(1985, 2024),
         'renewables_share_elec': np.random.uniform(5, 20, 39),
         'renewables_electricity': np.random.uniform(10, 100, 39),
@@ -30,40 +29,26 @@ except FileNotFoundError:
         'share_hydro_in_renew': np.random.uniform(60, 90, 39)
     })
 
-# Muat model-model Machine Learning
+# Coba muat data dari file, jika gagal gunakan dummy data
 try:
-    rf_model_share = joblib.load('../models/model_renewables_share_elec_rf.pkl')
-    rf_model_yoy_renew = joblib.load('../models/model_renewables_yoy_rf.pkl')
-    rf_model_yoy_fossil = joblib.load('../models/model_fossil_yoy_rf.pkl')
-    
-    # Prediksi untuk tahun 2024 dan 2025
-    future_years = pd.DataFrame({'year': [2024, 2025]})
-    X_future_share = future_years[['year']]
-    prediksi_share_2024_2025 = rf_model_share.predict(X_future_share)
-    prediksi_pangsa_ebt_2025 = prediksi_share_2024_2025[1]  # Index 1 untuk 2025
-    
-    # Prediksi YoY Growth
-    pred_yoy_ebt_2024 = 10.63
-    pred_yoy_ebt_2025 = 11.29
-    
-    # Confidence intervals
-    mean_preds_2024 = 10.50
-    std_preds_2024 = 0.75
-    mean_preds_2025 = 11.23
-    std_preds_2025 = 0.82
+    if os.path.exists('data/indo_energy_filled.csv'):
+        df = pd.read_csv('data/indo_energy_filled.csv')
+    elif os.path.exists('../data/indo_energy_filled.csv'):
+        df = pd.read_csv('../data/indo_energy_filled.csv')
+    else:
+        raise FileNotFoundError("Data file not found")
+except (FileNotFoundError, pd.errors.EmptyDataError):
+    print("Using dummy data for production deployment")
+    df = create_dummy_data()
 
-except FileNotFoundError:
-    print("Model files tidak ditemukan, menggunakan nilai placeholder")
-    prediksi_pangsa_ebt_2025 = 18.68
-    rf_model_share = None
-    rf_model_yoy_renew = None
-    rf_model_yoy_fossil = None
-    pred_yoy_ebt_2024 = 10.63
-    pred_yoy_ebt_2025 = 11.29
-    mean_preds_2024 = 10.50
-    std_preds_2024 = 0.75
-    mean_preds_2025 = 11.23
-    std_preds_2025 = 0.82
+# Nilai prediksi yang sudah dihitung (untuk production)
+prediksi_pangsa_ebt_2025 = 18.68
+pred_yoy_ebt_2024 = 10.63
+pred_yoy_ebt_2025 = 11.29
+mean_preds_2024 = 10.50
+std_preds_2024 = 0.75
+mean_preds_2025 = 11.23
+std_preds_2025 = 0.82
 
 # Hitung KPI dan nilai-nilai tetap
 pangsa_ebt_saat_ini = df[df['year'] == 2023]['renewables_share_elec'].iloc[0] if len(df[df['year'] == 2023]) > 0 else df['renewables_share_elec'].iloc[-1]
@@ -77,7 +62,7 @@ df_line_chart = df[(df['year'] >= 1985) & (df['year'] <= 2023)].copy()
 # Gabungkan data historis dan prediksi
 future_share_df = pd.DataFrame({
     'year': [2024, 2025],
-    'renewables_share_elec': [prediksi_pangsa_ebt_2025 - 1, prediksi_pangsa_ebt_2025]  # Estimasi 2024
+    'renewables_share_elec': [prediksi_pangsa_ebt_2025 - 1, prediksi_pangsa_ebt_2025]
 })
 combined_share_df = pd.concat([df_line_chart[['year', 'renewables_share_elec']], future_share_df])
 
@@ -90,7 +75,8 @@ combined_yoy_df = pd.concat([df_line_chart[['year', 'renewables_yoy_growth']], f
 
 # --- 2. Inisialisasi Aplikasi Dash ---
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-app.config.suppress_callback_exceptions = True
+app.title = "Dashboard Energi Terbarukan Indonesia"
+server = app.server  # Untuk deployment
 
 # --- 3. Definisikan Layout Dashboard ---
 app.layout = dbc.Container([
@@ -433,4 +419,5 @@ def update_simulation(renewables_share_value):
 
 # --- Jalankan Aplikasi ---
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 8050))
+    app.run(host='0.0.0.0', port=port, debug=False)
