@@ -255,5 +255,9 @@ The dashboard will typically run on your local machine and provide a URL (e.g., 
 
 ---
 
-**Author:** [JAMALLUDIN/https://github.com/Halozy-bit]
-**Contact:** [Jamalludin1999z@gmail.com/https://www.linkedin.com/in/jamalludin-449009195/]
+**Demo:** https://indonesia-re-transition-dashboard.onrender.com/
+---
+
+**Author:** JAMALLUDIN / https://github.com/Halozy-bit
+
+**Contact:** Jamalludin1999z@gmail.com / https://www.linkedin.com/in/jamalludin-449009195/
